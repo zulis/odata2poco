@@ -31,7 +31,7 @@ internal partial class Poco : IPocoGenerator
         Model = LoadModelFromString();
     }
 
-    public string MetaDataAsString => MetaData.MetaDataAsString;
+    public string MetaDataAsString => RemoveUnsupportedAttributes(MetaData.MetaDataAsString);
     private IEnumerable<IEdmEntitySet> EntitySets { get; set; }
     private List<string> SchemaErrors { get; }
     internal IEdmModel Model { get; set; }
@@ -61,10 +61,46 @@ internal partial class Poco : IPocoGenerator
 
     private IEdmModel LoadModelFromString()
     {
+        IEdmModel model;
         var tr = new StringReader(MetaDataAsString);
-        Model = EdmxReader.Parse(XmlReader.Create(tr));
-        EntitySets = GetEntitySets(Model);
-        return Model;
+        var reader = XmlReader.Create(tr);
+        try
+        {
+            EdmxReader.TryParse(reader, out model, out _);
+            EntitySets = GetEntitySets(model);
+        }
+        finally
+        {
+            ((IDisposable)reader).Dispose();
+        }
+
+        return model;
+    }
+
+    private string RemoveUnsupportedAttributes(string metaData)
+    {
+        var doc = new XmlDocument();
+        doc.LoadXml(metaData);
+
+        var manager = new XmlNamespaceManager(doc.NameTable);
+        manager.AddNamespace("ns", "http://schemas.microsoft.com/ado/2008/09/edm");
+        var nodes = doc.SelectNodes("//ns:Property[@CollectionKind]", manager);
+
+        if (nodes != null)
+        {
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                nodes[i].Attributes.Remove(nodes[i].Attributes["CollectionKind"]);
+            }
+
+            using var stringWriter = new StringWriter();
+            using var xmlTextWriter = XmlWriter.Create(stringWriter);
+            doc.WriteTo(xmlTextWriter);
+            xmlTextWriter.Flush();
+            metaData = stringWriter.GetStringBuilder().ToString();
+        }
+
+        return metaData;
     }
 
     private List<string> GetEnumElements(IEdmSchemaType type, out bool isFlags)
