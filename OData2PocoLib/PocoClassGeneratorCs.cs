@@ -152,7 +152,7 @@ internal class PocoClassGeneratorCs : IPocoClassGenerator
     {
         var namespc = name;
         if (!string.IsNullOrWhiteSpace(PocoSetting.NamespacePrefix))
-            namespc = PocoSetting.NamespacePrefix + "." + name;
+            namespc = PocoSetting.NamespacePrefix;
 
         return namespc;
     }
